@@ -10,7 +10,7 @@ import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
 
 /**
- * The context used for initialising {@link JarEntryTransformer transformer},
+ * The context used for initialising {@link JarEntryTransformer transformers},
  * so they can access JAR-specific constructs.
  *
  * <p><strong>Only one context will be created per Atlas run.</strong>

@@ -66,6 +66,8 @@ public class Atlas implements Closeable {
      *
      * @param input The input binary
      * @param output The output binary
+     * @throws IOException Should an issue occur reading the input JAR, or
+     *                     reading the output JAR
      */
     public void run(final Path input, final Path output) throws IOException {
         try (final JarFile jar = new JarFile(input)) {
@@ -89,11 +91,17 @@ public class Atlas implements Closeable {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <strong>Note that this will clear the classpath!</strong>
+     */
     @Override
     public void close() throws IOException {
         for (final JarFile jar : this.classpath) {
             jar.close();
         }
+        this.classpath.clear();
     }
 
 }
