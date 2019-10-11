@@ -68,27 +68,41 @@ public class Atlas implements Closeable {
      * @param output The output binary
      * @throws IOException Should an issue occur reading the input JAR, or
      *                     reading the output JAR
+     * @see #run(JarFile, Path)
      */
     public void run(final Path input, final Path output) throws IOException {
         try (final JarFile jar = new JarFile(input)) {
-            // Create a classpath for the current JAR file
-            final List<ClassProvider> classpath = new ArrayList<>();
-            classpath.add(jar);
-            classpath.addAll(this.classpath);
-
-            // Create the context for the JAR file
-            final AtlasTransformerContext context = new AtlasTransformerContext(
-                    new ClassProviderInheritanceProvider(new CascadingClassProvider(classpath))
-            );
-
-            // Construct the transformers
-            final JarEntryTransformer[] transformers = this.transformers.stream()
-                    .map(constructor -> constructor.apply(context))
-                    .toArray(JarEntryTransformer[]::new);
-
-            // Transform the JAR, and save to the output path
-            jar.transform(output, transformers);
+            this.run(jar, output);
         }
+    }
+
+    /**
+     * Runs the Atlas on the given input {@link JarFile jar}, saving the result to the
+     * given output path.
+     *
+     * @param jar The input jar
+     * @param output The output binary
+     * @throws IOException Should an issue occur reading the input JAR, or
+     *                     reading the output JAR
+     */
+    public void run(final JarFile jar, final Path output) throws IOException {
+        // Create a classpath for the current JAR file
+        final List<ClassProvider> classpath = new ArrayList<>();
+        classpath.add(jar);
+        classpath.addAll(this.classpath);
+
+        // Create the context for the JAR file
+        final AtlasTransformerContext context = new AtlasTransformerContext(
+                new ClassProviderInheritanceProvider(new CascadingClassProvider(classpath))
+        );
+
+        // Construct the transformers
+        final JarEntryTransformer[] transformers = this.transformers.stream()
+                .map(constructor -> constructor.apply(context))
+                .toArray(JarEntryTransformer[]::new);
+
+        // Transform the JAR, and save to the output path
+        jar.transform(output, transformers);
     }
 
     /**
