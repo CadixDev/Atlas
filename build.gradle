@@ -1,16 +1,105 @@
 apply plugin: 'java'
+apply plugin: 'maven'
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
+sourceCompatibility = javaVersion
+targetCompatibility = javaVersion
 
 group = 'org.cadixdev'
-version = '0.1.0-SNAPSHOT'
+archivesBaseName = project.name.toLowerCase()
+version = '0.1.0'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile 'org.cadixdev:bombe:0.3.1'
-    compile 'org.cadixdev:bombe-asm:0.3.1'
+    compile "org.cadixdev:bombe:$bombeVersion"
+    compile "org.cadixdev:bombe-asm:$bombeVersion"
+}
+
+processResources {
+    from 'LICENSE.txt'
+}
+
+task javadocJar(type: Jar, dependsOn: 'javadoc') {
+    from javadoc.destinationDir
+    classifier = 'javadoc'
+}
+
+task sourcesJar(type: Jar, dependsOn: 'classes') {
+    from sourceSets.main.allSource
+    classifier = 'sources'
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
+}
+
+if (project.hasProperty('ossrhUsername') && project.hasProperty('ossrhPassword')) {
+    apply plugin: 'signing'
+    signing {
+        required { !version.endsWith('-SNAPSHOT') && gradle.taskGraph.hasTask(tasks.uploadArchives) }
+        sign configurations.archives
+    }
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            // Maven Central
+            if (project.hasProperty('ossrhUsername') && project.hasProperty('ossrhPassword')) {
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+                repository(url: 'https://oss.sonatype.org/service/local/staging/deploy/maven2/') {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+
+                snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/') {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+            }
+
+            pom {
+                artifactId = project.archivesBaseName
+
+                project {
+                    name = project.name
+                    description = project.description
+                    packaging = 'jar'
+                    url = project.url
+                    inceptionYear = project.inceptionYear
+
+                    scm {
+                        url = 'https://github.com/CadixDev/Atlas'
+                        connection = 'scm:git:https://github.com/CadixDev/Atlas.git'
+                        developerConnection = 'scm:git:git@github.com:CadixDev/Atlas.git'
+                    }
+
+                    issueManagement {
+                        system = 'GitHub'
+                        url = 'https://github.com/CadixDev/Atlas/issues'
+                    }
+
+                    licenses {
+                        license {
+                            name = 'Mozilla Public License 2.0'
+                            url = 'https://opensource.org/licenses/MPL-2.0'
+                            distribution = 'repo'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id = 'jamierocks'
+                            name = 'Jamie Mansfield'
+                            email = 'dev@jamierocks.uk'
+                            url = 'https://www.jamiemansfield.me/'
+                            timezone = 'Europe/London'
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
