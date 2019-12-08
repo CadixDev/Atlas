@@ -39,19 +39,11 @@ public class JarFile implements ClassProvider, Closeable {
 
     private final Path path;
     private final FileSystem fs;
-    private final Map<String, JarClassEntry> classes = new ConcurrentHashMap<>();
+    private final Map<JarPath, JarClassEntry> cache = new ConcurrentHashMap<>();
 
     public JarFile(final Path path) throws IOException {
         this.path = path;
         this.fs = NIOHelper.openZip(this.path, false);
-        this.walk(JarVisitOption.IGNORE_MANIFESTS,
-                JarVisitOption.IGNORE_SERVICE_PROVIDER_CONFIGURATIONS,
-                JarVisitOption.IGNORE_RESOURCES)
-                .map(JarClassEntry.class::cast)
-                .forEach(klass -> {
-                    final String name = klass.getName();
-                    this.classes.put(name.substring(0, name.length() - ".class".length()), klass);
-                });
     }
 
     /**
@@ -64,22 +56,60 @@ public class JarFile implements ClassProvider, Closeable {
     }
 
     /**
-     * Gets the <strong>cached</strong> class entry, of the given name.
+     * Gets the entry for the given {@link JarPath JAR path}.
+     * <p>
+     * {@link JarClassEntry Class entries} will be cached upon use.
      *
-     * @param name The class name
-     * @return The class entry, or {@code null} is not present
+     * @param path The path of the entry
+     * @return The entry, or {@code null} if no entry for the path exists
+     * @throws IOException Should an issue occur reading the entry
      */
-    public JarClassEntry getClass(final String name) {
-        return this.classes.get(name);
+    public AbstractJarEntry get(final JarPath path) throws IOException {
+        final Path entry = this.fs.getPath(path.getName());
+        if (Files.notExists(entry)) return null;
+
+        if ("META-INF/MANIFEST.MF".equals(path.getName())) {
+            return _readManifest(entry);
+        }
+        else if (path.getName().startsWith("META-INF/services/")) {
+            return _readServiceConfig(entry);
+        }
+        else if (path.getName().endsWith(".class")) {
+            return this.getClass(path);
+        }
+        else {
+            return _readResource(entry);
+        }
     }
 
     /**
-     * Gets a stream of <strong>cached</strong> class entries.
+     * Gets the <strong>cached</strong> class entry, of the given
+     * {@link JarPath JAR path}.
      *
-     * @return The classes in the JAR file
+     * @param path The class's JAR entry path
+     * @return The class entry, or {@code null} if not present
      */
-    public Stream<JarClassEntry> classes() {
-        return this.classes.values().stream();
+    public JarClassEntry getClass(final JarPath path) {
+        return this.cache.computeIfAbsent(path, p -> {
+            final Path entry = this.fs.getPath(p.getName());
+            if (Files.notExists(entry)) return null;
+            try {
+                return _readClass(entry);
+            }
+            catch (final IOException ignored) {
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Gets the <strong>cached</strong> class entry, of the given name.
+     *
+     * @param name The class name
+     * @return The class entry, or {@code null} if not present
+     */
+    public JarClassEntry getClass(final String name) {
+        return this.getClass(new JarPath(name));
     }
 
     /**
@@ -90,15 +120,24 @@ public class JarFile implements ClassProvider, Closeable {
      * @return The jar entries
      * @throws IOException Should an issue with reading occur
      */
-    public Stream<AbstractJarEntry> walk(final JarVisitOption... options) throws IOException {
+    public Stream<JarPath> walk(final JarVisitOption... options) throws IOException {
         return Files.walk(this.fs.getPath("/")).filter(p -> !Files.isDirectory(p)).map(p -> {
-            try {
-                return _read(p, options);
+            final String name = p.toString().substring(1); // Trim leading /
+
+            if ("META-INF/MANIFEST.MF".equals(name)) {
+                if (_contains(JarVisitOption.IGNORE_MANIFESTS, options)) return null;
             }
-            catch (final IOException ex) {
-                ex.printStackTrace();
-                return null;
+            else if (name.startsWith("META-INF/services/")) {
+                if (_contains(JarVisitOption.IGNORE_SERVICE_PROVIDER_CONFIGURATIONS, options)) return null;
             }
+            else if (name.endsWith(".class")) {
+                if (_contains(JarVisitOption.IGNORE_CLASSES, options)) return null;
+            }
+            else {
+                if (_contains(JarVisitOption.IGNORE_RESOURCES, options)) return null;
+            }
+
+            return new JarPath(name);
         }).filter(Objects::nonNull);
     }
 
@@ -112,7 +151,17 @@ public class JarFile implements ClassProvider, Closeable {
      */
     public void transform(final Path export, final JarEntryTransformer... transformers) throws IOException {
         try (final FileSystem fs = NIOHelper.openZip(export, true)) {
-            Stream.concat(this.walk(JarVisitOption.IGNORE_CLASSES), this.classes.values().stream())
+            this.walk()
+                    .map(path -> {
+                        try {
+                            return this.get(path);
+                        }
+                        catch (final IOException ex) {
+                            ex.printStackTrace();
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
                     .map(entry -> {
                         for (final JarEntryTransformer transformer : transformers) {
                             entry = entry.accept(transformer);
@@ -137,48 +186,6 @@ public class JarFile implements ClassProvider, Closeable {
         }
     }
 
-    private static AbstractJarEntry _read(final Path entry, final JarVisitOption... options) throws IOException {
-        final String name = entry.toString().substring(1); // Remove '/' prefix
-        final long time = Files.getLastModifiedTime(entry).toMillis();
-
-        if ("META-INF/MANIFEST.MF".equals(name)) {
-            if (!_contains(JarVisitOption.IGNORE_MANIFESTS, options)) {
-                try (final InputStream is = Files.newInputStream(entry)) {
-                    return new JarManifestEntry(time, new Manifest(is));
-                }
-            }
-        }
-        else if (name.startsWith("META-INF/services/")) {
-            if (!_contains(JarVisitOption.IGNORE_SERVICE_PROVIDER_CONFIGURATIONS, options)) {
-                try (final InputStream is = Files.newInputStream(entry)) {
-                    final String serviceName = name.substring("META-INF/services/".length());
-
-                    final ServiceProviderConfiguration config = new ServiceProviderConfiguration(serviceName);
-                    config.read(is);
-                    return new JarServiceProviderConfigurationEntry(time, config);
-                }
-            }
-        }
-        else if (name.endsWith(".class")) {
-            if (!_contains(JarVisitOption.IGNORE_CLASSES, options)) {
-                return new JarClassEntry(name, time, Files.readAllBytes(entry));
-            }
-        }
-        else {
-            if (!_contains(JarVisitOption.IGNORE_RESOURCES, options)) {
-                return new JarResourceEntry(name, time, Files.readAllBytes(entry));
-            }
-        }
-        return null;
-    }
-
-    private static <T> boolean _contains(final T entry, final T[] in) {
-        for (final T i : in) {
-            if (i == entry) return true;
-        }
-        return false;
-    }
-
     @Override
     public byte[] get(final String klass) {
         final JarClassEntry entry = this.getClass(klass);
@@ -188,6 +195,46 @@ public class JarFile implements ClassProvider, Closeable {
     @Override
     public void close() throws IOException {
         this.fs.close();
+    }
+
+    private static JarManifestEntry _readManifest(final Path entry) throws IOException {
+        final long time = Files.getLastModifiedTime(entry).toMillis();
+
+        try (final InputStream is = Files.newInputStream(entry)) {
+            return new JarManifestEntry(time, new Manifest(is));
+        }
+    }
+
+    private static JarServiceProviderConfigurationEntry _readServiceConfig(final Path entry) throws IOException {
+        final String name = entry.toString().substring(1); // Remove '/' prefix
+        final long time = Files.getLastModifiedTime(entry).toMillis();
+
+        try (final InputStream is = Files.newInputStream(entry)) {
+            final String serviceName = name.substring("META-INF/services/".length());
+
+            final ServiceProviderConfiguration config = new ServiceProviderConfiguration(serviceName);
+            config.read(is);
+            return new JarServiceProviderConfigurationEntry(time, config);
+        }
+    }
+
+    private static JarClassEntry _readClass(final Path entry) throws IOException {
+        final String name = entry.toString().substring(1); // Remove '/' prefix
+        final long time = Files.getLastModifiedTime(entry).toMillis();
+        return new JarClassEntry(name, time, Files.readAllBytes(entry));
+    }
+
+    private static JarResourceEntry _readResource(final Path entry) throws IOException {
+        final String name = entry.toString().substring(1); // Remove '/' prefix
+        final long time = Files.getLastModifiedTime(entry).toMillis();
+        return new JarResourceEntry(name, time, Files.readAllBytes(entry));
+    }
+
+    private static <T> boolean _contains(final T entry, final T[] in) {
+        for (final T i : in) {
+            if (i == entry) return true;
+        }
+        return false;
     }
 
 }
