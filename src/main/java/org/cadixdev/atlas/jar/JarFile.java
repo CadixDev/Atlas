@@ -23,9 +23,15 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
 
@@ -65,7 +71,7 @@ public class JarFile implements ClassProvider, Closeable {
      * @throws IOException Should an issue occur reading the entry
      */
     public AbstractJarEntry get(final JarPath path) throws IOException {
-        final Path entry = this.fs.getPath(path.getName());
+        final Path entry = this.fs.getPath("/", path.getName());
         if (Files.notExists(entry)) return null;
 
         if ("META-INF/MANIFEST.MF".equals(path.getName())) {
@@ -91,7 +97,7 @@ public class JarFile implements ClassProvider, Closeable {
      */
     public JarClassEntry getClass(final JarPath path) {
         return this.cache.computeIfAbsent(path, p -> {
-            final Path entry = this.fs.getPath(p.getName());
+            final Path entry = this.fs.getPath("/", p.getName());
             if (Files.notExists(entry)) return null;
             try {
                 return _readClass(entry);
@@ -150,39 +156,49 @@ public class JarFile implements ClassProvider, Closeable {
      * @throws IOException Should an issue with reading or writing occur
      */
     public void transform(final Path export, final JarEntryTransformer... transformers) throws IOException {
+        Files.deleteIfExists(export);
         try (final FileSystem fs = NIOHelper.openZip(export, true)) {
-            this.walk()
-                    .map(path -> {
-                        try {
-                            return this.get(path);
-                        }
-                        catch (final IOException ex) {
-                            ex.printStackTrace();
-                            return null;
-                        }
-                    })
-                    .filter(Objects::nonNull)
-                    .map(entry -> {
-                        for (final JarEntryTransformer transformer : transformers) {
-                            entry = entry.accept(transformer);
-                        }
-                        return entry;
-                    })
-                    .forEach(entry -> {
-                        final Path outEntry = fs.getPath("/" + entry.getName());
+            final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.supplyAsync(() -> {
+                try {
+                    // Get the entry
+                    AbstractJarEntry entry = this.get(path);
+                    if (entry == null) return null;
 
-                        try {
-                            // Ensure parent directory exists
-                            Files.createDirectories(outEntry.getParent());
+                    // Transform the entry
+                    for (final JarEntryTransformer transformer : transformers) {
+                        entry = entry.accept(transformer);
+                    }
 
-                            // Write the result to the new jar
-                            Files.write(outEntry, entry.getContents());
-                            Files.setLastModifiedTime(outEntry, FileTime.fromMillis(entry.getTime()));
-                        }
-                        catch (final IOException ex) {
-                            ex.printStackTrace();
-                        }
-                    });
+                    // Write to jar
+                    final Path outEntry = fs.getPath("/", entry.getName());
+
+                    // Ensure parent directory exists
+                    Files.createDirectories(outEntry.getParent());
+
+                    // Write the result to the new jar
+                    Files.write(outEntry, entry.getContents());
+                    Files.setLastModifiedTime(outEntry, FileTime.fromMillis(entry.getTime()));
+                }
+                catch (final IOException ex) {
+                    throw new CompletionException(ex);
+                }
+                return null;
+            })).toArray(CompletableFuture[]::new));
+
+            future.get();
+        }
+        catch (final InterruptedException ex) {
+            throw new RuntimeException(ex);
+        }
+        catch (final ExecutionException ex) {
+            try {
+                throw ex.getCause();
+            }
+            catch (final IOException ioe) {
+                throw ioe;
+            }
+            catch (final Throwable ignored) {
+            }
         }
     }
 
