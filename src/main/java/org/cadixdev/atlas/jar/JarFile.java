@@ -188,7 +188,7 @@ public class JarFile implements ClassProvider, Closeable {
 
     @Override
     public byte[] get(final String klass) {
-        final JarClassEntry entry = this.getClass(klass);
+        final JarClassEntry entry = this.getClass(klass + ".class");
         return entry == null ? null : entry.getContents();
     }
 

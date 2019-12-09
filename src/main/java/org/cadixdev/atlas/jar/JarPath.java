@@ -6,6 +6,8 @@
 
 package org.cadixdev.atlas.jar;
 
+import java.util.Objects;
+
 /**
  * A path to an entry within a {@link JarFile JAR file}.
  *
@@ -27,6 +29,20 @@ public class JarPath {
      */
     public String getName() {
         return this.name;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof JarPath)) return false;
+        final JarPath that = (JarPath) obj;
+
+        return Objects.equals(this.name, that.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.name);
     }
 
 }
