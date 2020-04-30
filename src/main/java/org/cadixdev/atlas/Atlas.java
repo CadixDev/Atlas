@@ -9,8 +9,8 @@ package org.cadixdev.atlas;
 import org.cadixdev.atlas.jar.JarFile;
 import org.cadixdev.atlas.util.CascadingClassProvider;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
-import org.cadixdev.bombe.asm.analysis.ClassProviderInheritanceProvider;
-import org.cadixdev.bombe.asm.jar.ClassProvider;
+import org.cadixdev.bombe.analysis.asm.ClassProviderInheritanceProvider;
+import org.cadixdev.bombe.jar.ClassProvider;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
 
 import java.io.Closeable;

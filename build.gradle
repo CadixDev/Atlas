@@ -1,20 +1,24 @@
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'maven-publish'
 
 sourceCompatibility = javaVersion
 targetCompatibility = javaVersion
 
 group = 'org.cadixdev'
 archivesBaseName = project.name.toLowerCase()
-version = '0.2.0'
+version = '0.2.1-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
 }
 
 dependencies {
     compile "org.cadixdev:bombe:$bombeVersion"
-    compile "org.cadixdev:bombe-asm:$bombeVersion"
+    compile "org.cadixdev:bombe-jar:$bombeVersion"
 }
 
 processResources {
