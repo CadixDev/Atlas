@@ -13,8 +13,9 @@ repositories {
 }
 
 dependencies {
+    compile "org.ow2.asm:asm-commons:$asmVersion"
     compile "org.cadixdev:bombe:$bombeVersion"
-    compile "org.cadixdev:bombe-asm:$bombeVersion"
+    compile "org.cadixdev:bombe-jar:$bombeVersion"
 }
 
 processResources {

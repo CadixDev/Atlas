@@ -7,8 +7,8 @@
 package org.cadixdev.atlas.jar;
 
 import org.cadixdev.atlas.util.NIOHelper;
-import org.cadixdev.bombe.asm.jar.ClassProvider;
 import org.cadixdev.bombe.jar.AbstractJarEntry;
+import org.cadixdev.bombe.jar.ClassProvider;
 import org.cadixdev.bombe.jar.JarClassEntry;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
 import org.cadixdev.bombe.jar.JarManifestEntry;
@@ -23,15 +23,12 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
 
