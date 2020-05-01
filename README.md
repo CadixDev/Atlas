@@ -6,8 +6,8 @@ to manipulate Jars as you see fit.
 
 ```java
 final Atlas atlas = new Atlas();
-atlas.install((ctx) -> new JarEntryRemappingTransformer(
-        new LorenzRemapper(mappings)
+atlas.install(ctx -> new JarEntryRemappingTransformer(
+        new LorenzRemapper(mappings, ctx.inheritanceProvider())
 ));
 atlas.run(Paths.get("input.jar"), Paths.get("output.jar"));
 ```

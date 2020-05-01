@@ -16,11 +16,11 @@ import java.util.List;
  * @author Jamie Mansfield
  * @since 0.1.0
  */
-public class CascadingClassProvider implements ClassProvider {
+public class CompositeClassProvider implements ClassProvider {
 
     private final List<ClassProvider> providers;
 
-    public CascadingClassProvider(final List<ClassProvider> providers) {
+    public CompositeClassProvider(final List<ClassProvider> providers) {
         this.providers = providers;
     }
 

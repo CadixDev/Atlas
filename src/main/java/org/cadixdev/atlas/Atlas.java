@@ -7,7 +7,7 @@
 package org.cadixdev.atlas;
 
 import org.cadixdev.atlas.jar.JarFile;
-import org.cadixdev.atlas.util.CascadingClassProvider;
+import org.cadixdev.atlas.util.CompositeClassProvider;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.analysis.asm.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.jar.ClassProvider;
@@ -93,13 +93,14 @@ public class Atlas implements Closeable {
 
         // Create the context for the JAR file
         final AtlasTransformerContext context = new AtlasTransformerContext(
-                new ClassProviderInheritanceProvider(new CascadingClassProvider(classpath))
+                new ClassProviderInheritanceProvider(new CompositeClassProvider(classpath))
         );
 
         // Construct the transformers
-        final JarEntryTransformer[] transformers = this.transformers.stream()
-                .map(constructor -> constructor.apply(context))
-                .toArray(JarEntryTransformer[]::new);
+        final JarEntryTransformer[] transformers = new JarEntryTransformer[this.transformers.size()];
+        for (int i = 0; i < this.transformers.size(); i++) {
+            transformers[i] = this.transformers.get(i).apply(context);
+        }
 
         // Transform the JAR, and save to the output path
         jar.transform(output, transformers);
