@@ -197,7 +197,8 @@ public class JarFile implements ClassProvider, Closeable {
             catch (final IOException ioe) {
                 throw ioe;
             }
-            catch (final Throwable ignored) {
+            catch (final Throwable cause) {
+                throw new RuntimeException(cause);
             }
         }
     }
