@@ -33,20 +33,18 @@ import java.util.function.Function;
 public class Atlas implements Closeable {
 
     private final List<Function<AtlasTransformerContext, JarEntryTransformer>> transformers = new ArrayList<>();
-    private final List<JarFile> classpath = new ArrayList<>();
+    private final List<Path> classpath = new ArrayList<>();
 
     /**
-     * Adds the given JAR file to the Atlas classpath, allowing the
-     * {@link InheritanceProvider inheritance provider} to have a more complete view
-     * of the environment.
+     * Gets the classpath available to the {@link InheritanceProvider inheritance provider}.
+     * <p>
+     * The classpath is a list of paths that correspond to jar files, classes within
+     * those jars will be made available to the inheritance provider.
      *
-     * @param jar The path to the JAR file
-     * @return {@code this}, for chaining
-     * @throws IOException Should an issue occur reading the JAR file
+     * @return The classpath
      */
-    public Atlas use(final Path jar) throws IOException {
-        this.classpath.add(new JarFile(jar));
-        return this;
+    public List<Path> getClasspath() {
+        return this.classpath;
     }
 
     /**
@@ -89,7 +87,9 @@ public class Atlas implements Closeable {
         // Create a classpath for the current JAR file
         final List<ClassProvider> classpath = new ArrayList<>();
         classpath.add(jar);
-        classpath.addAll(this.classpath);
+        for (final Path jarPath : this.classpath) {
+            classpath.add(new JarFile(jarPath));
+        }
 
         // Create the context for the JAR file
         final AtlasTransformerContext context = new AtlasTransformerContext(
@@ -104,6 +104,14 @@ public class Atlas implements Closeable {
 
         // Transform the JAR, and save to the output path
         jar.transform(output, transformers);
+
+        // Close the JarFiles we made earlier
+        for (final ClassProvider classProvider : classpath) {
+            if (classProvider == jar) continue;
+            if (!(classProvider instanceof Closeable)) continue;
+
+            ((Closeable) classProvider).close();
+        }
     }
 
     /**
@@ -113,9 +121,6 @@ public class Atlas implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        for (final JarFile jar : this.classpath) {
-            jar.close();
-        }
         this.classpath.clear();
     }
 
