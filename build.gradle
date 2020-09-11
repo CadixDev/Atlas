@@ -32,6 +32,10 @@ task sourcesJar(type: Jar, dependsOn: 'classes') {
     classifier = 'sources'
 }
 
+jar {
+    manifest.attributes("Automatic-Module-Name": "${project.group}.atlas")
+}
+
 artifacts {
     archives javadocJar
     archives sourcesJar
