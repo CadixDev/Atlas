@@ -6,6 +6,9 @@
 
 package org.cadixdev.atlas.util;
 
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -19,12 +22,10 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
-import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-
 public final class JarRepacker {
 
-    private JarRepacker() {}
+    private JarRepacker() {
+    }
 
     /**
      * {@link JarInputStream} requires that if a {@code META-INF/MANIFEST.MF} record is present in a jar file, it must be
@@ -86,14 +87,16 @@ public final class JarRepacker {
                     out.putNextEntry(new ZipEntry(name));
                     try (final InputStream input = jarFile.getInputStream(currentEntry)) {
                         copy(input, out, buffer);
-                    } finally {
+                    }
+                    finally {
                         out.closeEntry();
                     }
                 }
             }
 
             Files.move(tempOut, outputJar, REPLACE_EXISTING, ATOMIC_MOVE);
-        } finally {
+        }
+        finally {
             Files.deleteIfExists(tempOut);
         }
     }
@@ -137,4 +140,5 @@ public final class JarRepacker {
             to.write(buffer, 0, read);
         }
     }
+
 }
