@@ -16,6 +16,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
@@ -38,7 +39,7 @@ public final class JarRepacker {
      * still very fast (compared to the remapping operation).
      *
      * @param outputJar The jar produced by the atlas transformation.
-     * @throws IOException If an IO error occurs
+     * @throws IOException If an IO error occurs.
      */
     public static void verifyJarManifest(final Path outputJar) throws IOException {
         final boolean maybeNeedsRepack;
@@ -61,7 +62,7 @@ public final class JarRepacker {
      * the first entry.
      *
      * @param outputJar The file to repack.
-     * @throws IOException If an IO error occurs
+     * @throws IOException If an IO error occurs.
      * @see #verifyJarManifest(Path)
      */
     private static void fixJarManifest(final Path outputJar) throws IOException {
@@ -72,16 +73,17 @@ public final class JarRepacker {
             try (final JarOutputStream out = new JarOutputStream(Files.newOutputStream(tempOut));
                  final JarFile jarFile = new JarFile(outputJar.toFile())) {
 
-                copyManifest(jarFile, out, buffer);
+                final boolean skipManifest = copyManifest(jarFile, out);
 
                 final Enumeration<JarEntry> entries = jarFile.entries();
                 while (entries.hasMoreElements()) {
                     final JarEntry currentEntry = entries.nextElement();
-                    if (currentEntry.getName().equals("META-INF/") || currentEntry.getName().equals("META-INF/MANIFEST.MF")) {
+                    final String name = currentEntry.getName();
+                    if (skipManifest && (name.equals("META-INF/") || name.equalsIgnoreCase("META-INF/MANIFEST.MF"))) {
                         continue;
                     }
 
-                    out.putNextEntry(new ZipEntry(currentEntry.getName()));
+                    out.putNextEntry(new ZipEntry(name));
                     try (final InputStream input = jarFile.getInputStream(currentEntry)) {
                         copy(input, out, buffer);
                     } finally {
@@ -101,34 +103,33 @@ public final class JarRepacker {
      *
      * @param jarFile The input file to read the manifest from.
      * @param out The output stream to write the manifest to.
-     * @param buffer The byte array to use as the copy buffer
-     * @throws IOException If an IO error occurs
+     * @return {@code true} if the manifest file was copied successfully.
+     * @throws IOException If an IO error occurs.
      */
-    private static void copyManifest(final JarFile jarFile, final JarOutputStream out, final byte[] buffer) throws IOException {
+    private static boolean copyManifest(final JarFile jarFile, final JarOutputStream out) throws IOException {
+        final Manifest manifest = jarFile.getManifest();
+        if (manifest == null) {
+            // something weird happened, but don't error
+            return false;
+        }
+
         out.putNextEntry(new ZipEntry("META-INF/"));
         out.closeEntry();
 
-        final ZipEntry manifestEntry = jarFile.getEntry("META-INF/MANIFEST.MF");
-        if (manifestEntry == null) {
-            // something weird happened, but don't error
-            return;
-        }
+        out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
+        manifest.write(out);
+        out.closeEntry();
 
-        out.putNextEntry(new ZipEntry(manifestEntry.getName()));
-        try (final InputStream entryInput = jarFile.getInputStream(manifestEntry)) {
-            copy(entryInput, out, buffer);
-        } finally {
-            out.closeEntry();
-        }
+        return true;
     }
 
     /**
      * Copy all of the data from the {@code from} input to the {@code to} output.
      *
-     * @param from The input to copy from
-     * @param to The output to copy to
-     * @param buffer The byte array to use as the copy buffer
-     * @throws IOException If an IO error occurs
+     * @param from The input to copy from.
+     * @param to The output to copy to.
+     * @param buffer The byte array to use as the copy buffer.
+     * @throws IOException If an IO error occurs.
      */
     private static void copy(final InputStream from, final OutputStream to, final byte[] buffer) throws IOException {
         int read;
