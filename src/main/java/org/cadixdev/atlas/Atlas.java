@@ -8,6 +8,7 @@ package org.cadixdev.atlas;
 
 import org.cadixdev.atlas.jar.JarFile;
 import org.cadixdev.atlas.util.CompositeClassProvider;
+import org.cadixdev.atlas.util.JarRepacker;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.analysis.asm.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.jar.ClassProvider;
@@ -104,6 +105,8 @@ public class Atlas implements Closeable {
 
         // Transform the JAR, and save to the output path
         jar.transform(output, transformers);
+
+        JarRepacker.verifyJarManifest(output);
 
         // Close the JarFiles we made earlier
         for (final ClassProvider classProvider : classpath) {
