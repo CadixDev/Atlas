@@ -172,6 +172,7 @@ public class JarFile implements ClassProvider, Closeable {
      * @param executorService The executor service to use
      * @param transformers The transformers to use
      * @throws IOException Should an issue with reading or writing occur
+     * @since 0.2.1
      */
     public void transform(final Path export, final ExecutorService executorService, final JarEntryTransformer... transformers) throws IOException {
         Files.deleteIfExists(export);

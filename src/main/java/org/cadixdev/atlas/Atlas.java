@@ -41,15 +41,41 @@ public class Atlas implements Closeable {
     private final ExecutorService executorService;
     private final boolean manageExecutor;
 
-    public Atlas(final ExecutorService executorService, final boolean manageExecutor) {
+    /**
+     * Creates an Atlas with an associated executor service.
+     *
+     * @param executorService The executor service
+     * @param manageExecutor Whether to shutdown the executor service when closing the atlas
+     * @since 0.2.1
+     */
+    private Atlas(final ExecutorService executorService, final boolean manageExecutor) {
         this.executorService = executorService;
         this.manageExecutor = manageExecutor;
     }
 
+    /**
+     * Creates an Atlas with an associated executor service.
+     *
+     * @param executorService The executor service
+     * @since 0.2.1
+     */
+    public Atlas(final ExecutorService executorService) {
+        this(executorService, false);
+    }
+
+    /**
+     * Creates an Atlas with a default executor service (made with {@link Executors#newWorkStealingPool(int)}).
+     *
+     * @param parallelism The targeted parallelism level
+     * @since 0.2.1
+     */
     public Atlas(final int parallelism) {
         this(Executors.newWorkStealingPool(parallelism), true);
     }
 
+    /**
+     * Creates an Atlas with a default executor service, {@link Executors#newWorkStealingPool()}.
+     */
     public Atlas() {
         this(Executors.newWorkStealingPool(), true);
     }
