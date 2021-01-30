@@ -22,6 +22,13 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
+/**
+ * A helper class for repackaging jar files so that they're read by Java correctly, see {@link #verifyJarManifest(Path)}
+ * for more details.
+ *
+ * @author Kyle Wood
+ * @since 0.2.1
+ */
 public final class JarRepacker {
 
     private JarRepacker() {
