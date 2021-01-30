@@ -167,6 +167,10 @@ public class JarFile implements ClassProvider, Closeable {
                     // Transform the entry
                     for (final JarEntryTransformer transformer : transformers) {
                         entry = entry.accept(transformer);
+
+                        // If a transformer wants to remove an entry, it should return null.
+                        // TODO: document this in Bombe
+                        if (entry == null) return null;
                     }
 
                     // Write to jar
