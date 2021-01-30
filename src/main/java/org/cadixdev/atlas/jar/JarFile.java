@@ -23,15 +23,14 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
 
@@ -156,17 +155,41 @@ public class JarFile implements ClassProvider, Closeable {
      * @throws IOException Should an issue with reading or writing occur
      */
     public void transform(final Path export, final JarEntryTransformer... transformers) throws IOException {
+        final ExecutorService executorService = Executors.newWorkStealingPool();
+        try {
+            this.transform(export, executorService, transformers);
+        }
+        finally {
+            executorService.shutdown();
+        }
+    }
+
+    /**
+     * Transforms the JAR file, with the given {@link JarEntryTransformer}s, writing
+     * to the given output JAR path.
+     *
+     * @param export The JAR path to write to
+     * @param executorService The executor service to use
+     * @param transformers The transformers to use
+     * @throws IOException Should an issue with reading or writing occur
+     * @since 0.2.1
+     */
+    public void transform(final Path export, final ExecutorService executorService, final JarEntryTransformer... transformers) throws IOException {
         Files.deleteIfExists(export);
         try (final FileSystem fs = NIOHelper.openZip(export, true)) {
-            final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.supplyAsync(() -> {
+            final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.runAsync(() -> {
                 try {
                     // Get the entry
                     AbstractJarEntry entry = this.get(path);
-                    if (entry == null) return null;
+                    if (entry == null) return;
 
                     // Transform the entry
                     for (final JarEntryTransformer transformer : transformers) {
                         entry = entry.accept(transformer);
+
+                        // If a transformer wants to remove an entry, it should return null.
+                        // TODO: document this in Bombe
+                        if (entry == null) return;
                     }
 
                     // Write to jar
@@ -182,8 +205,7 @@ public class JarFile implements ClassProvider, Closeable {
                 catch (final IOException ex) {
                     throw new CompletionException(ex);
                 }
-                return null;
-            })).toArray(CompletableFuture[]::new));
+            }, executorService)).toArray(CompletableFuture[]::new));
 
             future.get();
         }
@@ -197,7 +219,8 @@ public class JarFile implements ClassProvider, Closeable {
             catch (final IOException ioe) {
                 throw ioe;
             }
-            catch (final Throwable ignored) {
+            catch (final Throwable cause) {
+                throw new RuntimeException(cause);
             }
         }
     }

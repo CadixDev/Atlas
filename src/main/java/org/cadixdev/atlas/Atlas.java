@@ -8,6 +8,7 @@ package org.cadixdev.atlas;
 
 import org.cadixdev.atlas.jar.JarFile;
 import org.cadixdev.atlas.util.CascadingClassProvider;
+import org.cadixdev.atlas.util.JarRepacker;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.asm.analysis.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.asm.jar.ClassProvider;
@@ -18,6 +19,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 /**
@@ -34,6 +37,48 @@ public class Atlas implements Closeable {
 
     private final List<Function<AtlasTransformerContext, JarEntryTransformer>> transformers = new ArrayList<>();
     private final List<JarFile> classpath = new ArrayList<>();
+
+    private final ExecutorService executorService;
+    private final boolean manageExecutor;
+
+    /**
+     * Creates an Atlas with an associated executor service.
+     *
+     * @param executorService The executor service
+     * @param manageExecutor Whether to shutdown the executor service when closing the atlas
+     * @since 0.2.1
+     */
+    private Atlas(final ExecutorService executorService, final boolean manageExecutor) {
+        this.executorService = executorService;
+        this.manageExecutor = manageExecutor;
+    }
+
+    /**
+     * Creates an Atlas with an associated executor service.
+     *
+     * @param executorService The executor service
+     * @since 0.2.1
+     */
+    public Atlas(final ExecutorService executorService) {
+        this(executorService, false);
+    }
+
+    /**
+     * Creates an Atlas with a default executor service (made with {@link Executors#newWorkStealingPool(int)}).
+     *
+     * @param parallelism The targeted parallelism level
+     * @since 0.2.1
+     */
+    public Atlas(final int parallelism) {
+        this(Executors.newWorkStealingPool(parallelism), true);
+    }
+
+    /**
+     * Creates an Atlas with a default executor service, {@link Executors#newWorkStealingPool()}.
+     */
+    public Atlas() {
+        this(Executors.newWorkStealingPool(), true);
+    }
 
     /**
      * Adds the given JAR file to the Atlas classpath, allowing the
@@ -102,7 +147,9 @@ public class Atlas implements Closeable {
                 .toArray(JarEntryTransformer[]::new);
 
         // Transform the JAR, and save to the output path
-        jar.transform(output, transformers);
+        jar.transform(output, this.executorService, transformers);
+
+        JarRepacker.verifyJarManifest(output);
     }
 
     /**
@@ -112,6 +159,10 @@ public class Atlas implements Closeable {
      */
     @Override
     public void close() throws IOException {
+        if (this.manageExecutor) {
+            this.executorService.shutdown();
+        }
+
         for (final JarFile jar : this.classpath) {
             jar.close();
         }
