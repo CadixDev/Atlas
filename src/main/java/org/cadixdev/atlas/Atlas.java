@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 /**
@@ -35,6 +37,22 @@ public class Atlas implements Closeable {
 
     private final List<Function<AtlasTransformerContext, JarEntryTransformer>> transformers = new ArrayList<>();
     private final List<JarFile> classpath = new ArrayList<>();
+
+    private final ExecutorService executorService;
+    private final boolean manageExecutor;
+
+    public Atlas(final ExecutorService executorService, final boolean manageExecutor) {
+        this.executorService = executorService;
+        this.manageExecutor = manageExecutor;
+    }
+
+    public Atlas(final int parallelism) {
+        this(Executors.newWorkStealingPool(parallelism), true);
+    }
+
+    public Atlas() {
+        this(Executors.newWorkStealingPool(), true);
+    }
 
     /**
      * Adds the given JAR file to the Atlas classpath, allowing the
@@ -103,7 +121,7 @@ public class Atlas implements Closeable {
                 .toArray(JarEntryTransformer[]::new);
 
         // Transform the JAR, and save to the output path
-        jar.transform(output, transformers);
+        jar.transform(output, this.executorService, transformers);
 
         JarRepacker.verifyJarManifest(output);
     }
@@ -115,6 +133,10 @@ public class Atlas implements Closeable {
      */
     @Override
     public void close() throws IOException {
+        if (this.manageExecutor) {
+            this.executorService.shutdown();
+        }
+
         for (final JarFile jar : this.classpath) {
             jar.close();
         }
