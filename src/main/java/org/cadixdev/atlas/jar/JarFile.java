@@ -149,6 +149,10 @@ public class JarFile implements ClassProvider, Closeable {
     /**
      * Transforms the JAR file, with the given {@link JarEntryTransformer}s, writing
      * to the given output JAR path.
+     * <p>
+     * This will use {@link Executors#newWorkStealingPool()} as the executor service,
+     * use {@link #transform(Path, ExecutorService, JarEntryTransformer...)} if you
+     * wish to control this.
      *
      * @param export The JAR path to write to
      * @param transformers The transformers to use
@@ -207,6 +211,85 @@ public class JarFile implements ClassProvider, Closeable {
                 }
             }, executorService)).toArray(CompletableFuture[]::new));
 
+            future.get();
+        }
+        catch (final InterruptedException ex) {
+            throw new RuntimeException(ex);
+        }
+        catch (final ExecutionException ex) {
+            try {
+                throw ex.getCause();
+            }
+            catch (final IOException ioe) {
+                throw ioe;
+            }
+            catch (final Throwable cause) {
+                throw new RuntimeException(cause);
+            }
+        }
+    }
+
+    /**
+     * Processes the JAR file, running the given {@link JarEntryTransformer jar entry transformers}
+     * for each path within the jar.
+     * <p>
+     * The eventual result of transformation is ignored, and not written to file.
+     * {@link #transform(Path, ExecutorService, JarEntryTransformer...)} should be used if such
+     * behaviour is desired.
+     * <p>
+     * This will use {@link Executors#newWorkStealingPool()} as the executor service, use
+     * {@link #process(ExecutorService, JarEntryTransformer...)} if you wish to control this.
+     *
+     * @param transformers The transformers to use
+     * @throws IOException Should an issue with reading occur
+     * @since 0.2.2
+     */
+    public void process(final JarEntryTransformer... transformers) throws IOException {
+        final ExecutorService executorService = Executors.newWorkStealingPool();
+        try {
+            this.process(executorService, transformers);
+        }
+        finally {
+            executorService.shutdown();
+        }
+    }
+
+    /**
+     * Processes the JAR file, running the given {@link JarEntryTransformer jar entry transformers}
+     * for each path within the jar.
+     * <p>
+     * The eventual result of transformation is ignored, and not written to file.
+     * {@link #transform(Path, ExecutorService, JarEntryTransformer...)} should be used if such
+     * behaviour is desired.
+     *
+     * @param executorService The executor service to use
+     * @param transformers The transformers to use
+     * @throws IOException Should an issue with reading occur
+     * @since 0.2.2
+     */
+    public void process(final ExecutorService executorService, final JarEntryTransformer... transformers)
+            throws IOException {
+        final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.runAsync(() -> {
+            try {
+                // Get the entry
+                AbstractJarEntry entry = this.get(path);
+                if (entry == null) return;
+
+                // Transform the entry
+                for (final JarEntryTransformer transformer : transformers) {
+                    entry = entry.accept(transformer);
+
+                    // If a transformer wants to remove an entry, it should return null.
+                    // TODO: document this in Bombe
+                    if (entry == null) return;
+                }
+            }
+            catch (final IOException ex) {
+                throw new CompletionException(ex);
+            }
+        }, executorService)).toArray(CompletableFuture[]::new));
+
+        try {
             future.get();
         }
         catch (final InterruptedException ex) {
