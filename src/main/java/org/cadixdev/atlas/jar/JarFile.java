@@ -190,9 +190,6 @@ public class JarFile implements ClassProvider, Closeable {
                     // Transform the entry
                     for (final JarEntryTransformer transformer : transformers) {
                         entry = entry.accept(transformer);
-
-                        // If a transformer wants to remove an entry, it should return null.
-                        // TODO: document this in Bombe
                         if (entry == null) return;
                     }
 
@@ -212,6 +209,21 @@ public class JarFile implements ClassProvider, Closeable {
             }, executorService)).toArray(CompletableFuture[]::new));
 
             future.get();
+
+            // Add additions from transformers
+            for (final JarEntryTransformer transformer : transformers) {
+                for (final AbstractJarEntry addition : transformer.additions()) {
+                    // Write to jar
+                    final Path outEntry = fs.getPath("/", addition.getName());
+
+                    // Ensure parent directory exists
+                    Files.createDirectories(outEntry.getParent());
+
+                    // Write the result to the new jar
+                    Files.write(outEntry, addition.getContents());
+                    Files.setLastModifiedTime(outEntry, FileTime.fromMillis(addition.getTime()));
+                }
+            }
         }
         catch (final InterruptedException ex) {
             throw new RuntimeException(ex);
@@ -278,9 +290,6 @@ public class JarFile implements ClassProvider, Closeable {
                 // Transform the entry
                 for (final JarEntryTransformer transformer : transformers) {
                     entry = entry.accept(transformer);
-
-                    // If a transformer wants to remove an entry, it should return null.
-                    // TODO: document this in Bombe
                     if (entry == null) return;
                 }
             }
