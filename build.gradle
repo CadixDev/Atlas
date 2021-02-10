@@ -6,7 +6,7 @@ targetCompatibility = javaVersion
 
 group = 'org.cadixdev'
 archivesBaseName = project.name.toLowerCase()
-version = '0.2.2-SNAPSHOT'
+version = '0.2.2'
 
 repositories {
     mavenCentral()
