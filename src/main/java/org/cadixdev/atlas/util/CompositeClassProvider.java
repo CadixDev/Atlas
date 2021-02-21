@@ -6,7 +6,7 @@
 
 package org.cadixdev.atlas.util;
 
-import org.cadixdev.bombe.jar.ClassProvider;
+import org.cadixdev.bombe.provider.ClassProvider;
 
 import java.util.List;
 

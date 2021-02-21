@@ -8,7 +8,7 @@ package org.cadixdev.atlas.jar;
 
 import org.cadixdev.atlas.util.NIOHelper;
 import org.cadixdev.bombe.jar.AbstractJarEntry;
-import org.cadixdev.bombe.jar.ClassProvider;
+import org.cadixdev.bombe.provider.ClassProvider;
 import org.cadixdev.bombe.jar.JarClassEntry;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
 import org.cadixdev.bombe.jar.JarManifestEntry;

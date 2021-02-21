@@ -11,7 +11,7 @@ import org.cadixdev.atlas.util.CompositeClassProvider;
 import org.cadixdev.atlas.util.JarRepacker;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.analysis.asm.ClassProviderInheritanceProvider;
-import org.cadixdev.bombe.jar.ClassProvider;
+import org.cadixdev.bombe.provider.ClassProvider;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
 
 import java.io.Closeable;
