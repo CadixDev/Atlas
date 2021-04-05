@@ -26,7 +26,6 @@ import java.nio.file.attribute.FileTime;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -157,6 +156,8 @@ public class JarFile implements ClassProvider, Closeable {
      * @param export The JAR path to write to
      * @param transformers The transformers to use
      * @throws IOException Should an issue with reading or writing occur
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      */
     public void transform(final Path export, final JarEntryTransformer... transformers) throws IOException {
         final ExecutorService executorService = Executors.newWorkStealingPool();
@@ -176,10 +177,13 @@ public class JarFile implements ClassProvider, Closeable {
      * @param executorService The executor service to use
      * @param transformers The transformers to use
      * @throws IOException Should an issue with reading or writing occur
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      * @since 0.2.1
      */
     public void transform(final Path export, final ExecutorService executorService, final JarEntryTransformer... transformers) throws IOException {
         Files.deleteIfExists(export);
+        final Map<JarPath, Exception> failedLocations = new ConcurrentHashMap<>();
         try (final FileSystem fs = NIOHelper.openZip(export, true)) {
             final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.runAsync(() -> {
                 try {
@@ -203,12 +207,23 @@ public class JarFile implements ClassProvider, Closeable {
                     Files.write(outEntry, entry.getContents());
                     Files.setLastModifiedTime(outEntry, FileTime.fromMillis(entry.getTime()));
                 }
-                catch (final IOException ex) {
-                    throw new CompletionException(ex);
+                catch (final Exception ex) {
+                    failedLocations.put(path, ex);
                 }
             }, executorService)).toArray(CompletableFuture[]::new));
 
-            future.get();
+            future.handle((value, error) -> {
+                // Capture errors
+                if (error != null) {
+                    throw new RuntimeException(error);
+                }
+                return value;
+            }).get();
+
+            if (!failedLocations.isEmpty()) {
+                // Some entries failed to transform
+                throw new JarTransformFailedException("Some entries in " + this.getName() + " failed to be transformed", failedLocations);
+            }
 
             // Add additions from transformers
             for (final JarEntryTransformer transformer : transformers) {
@@ -254,6 +269,8 @@ public class JarFile implements ClassProvider, Closeable {
      *
      * @param transformers The transformers to use
      * @throws IOException Should an issue with reading occur
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      * @since 0.2.2
      */
     public void process(final JarEntryTransformer... transformers) throws IOException {
@@ -277,10 +294,13 @@ public class JarFile implements ClassProvider, Closeable {
      * @param executorService The executor service to use
      * @param transformers The transformers to use
      * @throws IOException Should an issue with reading occur
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      * @since 0.2.2
      */
     public void process(final ExecutorService executorService, final JarEntryTransformer... transformers)
             throws IOException {
+        final Map<JarPath, Exception> failedLocations = new ConcurrentHashMap<>();
         final CompletableFuture<Void> future = CompletableFuture.allOf(this.walk().map(path -> CompletableFuture.runAsync(() -> {
             try {
                 // Get the entry
@@ -293,13 +313,24 @@ public class JarFile implements ClassProvider, Closeable {
                     if (entry == null) return;
                 }
             }
-            catch (final IOException ex) {
-                throw new CompletionException(ex);
+            catch (final Exception ex) {
+                failedLocations.put(path, ex);
             }
         }, executorService)).toArray(CompletableFuture[]::new));
 
         try {
-            future.get();
+            future.handle((value, error) -> {
+                // Capture errors
+                if (error != null) {
+                    throw new RuntimeException(error);
+               }
+                return value;
+            }).get();
+
+            if (!failedLocations.isEmpty()) {
+                // Some entries failed to transform
+                throw new JarTransformFailedException("Some entries in " + this.getName() + " failed to be transformed", failedLocations);
+            }
         }
         catch (final InterruptedException ex) {
             throw new RuntimeException(ex);

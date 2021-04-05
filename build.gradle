@@ -21,10 +21,17 @@ dependencies {
     compile "org.ow2.asm:asm-commons:$asmVersion"
     compile "org.cadixdev:bombe:$bombeVersion"
     compile "org.cadixdev:bombe-jar:$bombeVersion"
+
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
 }
 
 processResources {
     from 'LICENSE.txt'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 task javadocJar(type: Jar, dependsOn: 'javadoc') {

@@ -7,6 +7,7 @@
 package org.cadixdev.atlas;
 
 import org.cadixdev.atlas.jar.JarFile;
+import org.cadixdev.atlas.jar.JarTransformFailedException;
 import org.cadixdev.atlas.util.CompositeClassProvider;
 import org.cadixdev.atlas.util.JarRepacker;
 import org.cadixdev.bombe.analysis.InheritanceProvider;
@@ -111,6 +112,8 @@ public class Atlas implements Closeable {
      * @param output The output binary
      * @throws IOException Should an issue occur reading the input JAR, or
      *                     reading the output JAR
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      * @see #run(JarFile, Path)
      */
     public void run(final Path input, final Path output) throws IOException {
@@ -127,6 +130,8 @@ public class Atlas implements Closeable {
      * @param output The output binary
      * @throws IOException Should an issue occur reading the input JAR, or
      *                     reading the output JAR
+     * @throws JarTransformFailedException if one or more transformers threw
+     *     exceptions while processing a jar entry
      */
     public void run(final JarFile jar, final Path output) throws IOException {
         // Create a classpath for the current JAR file
@@ -148,16 +153,20 @@ public class Atlas implements Closeable {
         }
 
         // Transform the JAR, and save to the output path
-        jar.transform(output, transformers);
+        try {
+            jar.transform(output, transformers);
 
-        JarRepacker.verifyJarManifest(output);
+            JarRepacker.verifyJarManifest(output);
+        } finally {
+            // Close the JarFiles we made earlier
+            for (final ClassProvider classProvider : classpath) {
+                if (classProvider == jar)
+                    continue;
+                if (!(classProvider instanceof Closeable))
+                    continue;
 
-        // Close the JarFiles we made earlier
-        for (final ClassProvider classProvider : classpath) {
-            if (classProvider == jar) continue;
-            if (!(classProvider instanceof Closeable)) continue;
-
-            ((Closeable) classProvider).close();
+                ((Closeable) classProvider).close();
+            }
         }
     }
 
