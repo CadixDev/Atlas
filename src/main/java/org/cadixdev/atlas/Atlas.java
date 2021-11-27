@@ -13,6 +13,7 @@ import org.cadixdev.bombe.analysis.InheritanceProvider;
 import org.cadixdev.bombe.analysis.asm.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.provider.ClassProvider;
 import org.cadixdev.bombe.jar.JarEntryTransformer;
+import org.objectweb.asm.Opcodes;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -40,6 +41,21 @@ public class Atlas implements Closeable {
 
     private final ExecutorService executorService;
     private final boolean manageExecutor;
+    private final int api;
+
+    /**
+     * Creates an Atlas with an associated executor service.
+     *
+     * @param executorService The executor service
+     * @param manageExecutor Whether to shutdown the executor service when closing the atlas
+     * @param api The ASM API version to use
+     * @since 0.2.3
+     */
+    private Atlas(final ExecutorService executorService, final boolean manageExecutor, final int api) {
+        this.executorService = executorService;
+        this.manageExecutor = manageExecutor;
+        this.api = api;
+    }
 
     /**
      * Creates an Atlas with an associated executor service.
@@ -49,8 +65,7 @@ public class Atlas implements Closeable {
      * @since 0.2.1
      */
     private Atlas(final ExecutorService executorService, final boolean manageExecutor) {
-        this.executorService = executorService;
-        this.manageExecutor = manageExecutor;
+        this(executorService, manageExecutor, Opcodes.ASM7);
     }
 
     /**
@@ -138,7 +153,7 @@ public class Atlas implements Closeable {
 
         // Create the context for the JAR file
         final AtlasTransformerContext context = new AtlasTransformerContext(
-                new ClassProviderInheritanceProvider(new CompositeClassProvider(classpath))
+                new ClassProviderInheritanceProvider(api, new CompositeClassProvider(classpath))
         );
 
         // Construct the transformers
